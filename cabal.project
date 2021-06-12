@@ -1,0 +1,7 @@
+packages: .
+with-compiler: ghc-8.10.4
+
+source-repository-package
+    type: git
+    location: https://github.com/andrewthad/contiguous
+    tag: 22734a3140769cb193fe5b08ba9fe3c5e20d8b5f
