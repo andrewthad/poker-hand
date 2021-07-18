@@ -1,18 +1,24 @@
+{-# language BangPatterns #-}
 {-# language LambdaCase #-}
 {-# language OverloadedLists #-}
 {-# language OverloadedStrings #-}
 
+import Control.Applicative (liftA2)
 import Control.Monad (when)
 import Test.Tasty (defaultMain,testGroup,TestTree)
 import Test.Tasty.HUnit ((@=?))
 import Poker.Types
-import Poker.Evaluate (evaluate)
+import Poker.Evaluate (evaluate,evaluateMany)
+import Data.Primitive.PrimArray (PrimArray)
+import Test.Tasty.QuickCheck ((===))
 
+import qualified Data.Primitive as PM
 import qualified GHC.Exts as Exts
 import qualified Poker.Card as Card
 import qualified Poker.Evaluate as Evaluate
 import qualified Poker.Sort as Sort
 import qualified Test.Tasty.HUnit as THU
+import qualified Test.Tasty.QuickCheck as TQC
 
 main :: IO ()
 main = defaultMain tests
@@ -151,7 +157,213 @@ tests = testGroup "Tests"
         Evaluate.High Ace King Eight Seven Six
       ]
     ]
+  , testGroup "evaluateMany"
+    [ testGroup "flush"
+      [ THU.testCase "A" $ evaluateMany
+        [spadeTen,heartNine,spadeFour,heartKing,spadeSix
+        ,heartFour,spadeFive,spadeQueen,spadeThree,heartFive
+        ,heartTwo,diamondAce,heartThree
+        ]
+        @=?
+        Evaluate.Flush King Nine Five Four Three
+      , THU.testCase "B" $ evaluateMany
+        [clubSeven,clubFive,clubSix,clubEight,clubAce]
+        @=?
+        Evaluate.Flush Ace Eight Seven Six Five
+      , THU.testCase "C" $ evaluateMany
+        [heartFour,heartFive,heartSeven,heartKing,heartTwo]
+        @=?
+        Evaluate.Flush King Seven Five Four Two
+      ]
+    , testGroup "five-of-a-kind"
+      [ THU.testCase "A" $ evaluateMany
+        [spadeAce,heartAce,diamondAce,heartAce,clubAce]
+        @=?
+        Evaluate.Kind5 Ace
+      , THU.testCase "B" $ evaluateMany
+        [diamondFive,diamondAce,heartFive,clubFive,heartTwo
+        ,spadeFive,diamondFive
+        ]
+        @=?
+        Evaluate.Kind5 Five
+      ]
+    , testGroup "four-of-a-kind"
+      [ THU.testCase "A" $ evaluateMany
+        [spadeAce,heartAce,diamondAce,spadeJack,clubAce]
+        @=?
+        Evaluate.Kind4 Ace Jack
+      , THU.testCase "B" $ evaluateMany
+        [diamondTwo,heartAce,clubTwo,spadeTwo,spadeTwo]
+        @=?
+        Evaluate.Kind4 Two Ace
+      , THU.testCase "C" $ evaluateMany
+        [diamondTwo,heartFour,clubTwo,spadeTwo,diamondQueen,spadeTwo]
+        @=?
+        Evaluate.Kind4 Two Queen
+      , THU.testCase "D" $ evaluateMany
+        [diamondKing,heartKing,heartTwo,clubFive,spadeKing,diamondKing]
+        @=?
+        Evaluate.Kind4 King Five
+      ]
+    , testGroup "three-of-a-kind"
+      [ THU.testCase "A" $ evaluateMany
+        [clubSeven,heartFour,spadeSeven,diamondFive,clubSeven]
+        @=?
+        Evaluate.Kind3 Seven Five Four
+      , THU.testCase "B" $ evaluateMany
+        [clubFive,heartKing,spadeFive,diamondSeven,clubFive]
+        @=?
+        Evaluate.Kind3 Five King Seven
+      ]
+    , testGroup "full-house"
+      [ THU.testCase "A" $ evaluateMany
+        [clubSeven,heartFive,spadeSeven,diamondFive,clubSeven]
+        @=?
+        Evaluate.FullHouse Seven Five
+      , THU.testCase "B" $ evaluateMany
+        [clubFive,heartSeven,spadeFive,diamondSeven,clubFive]
+        @=?
+        Evaluate.FullHouse Five Seven
+      , THU.testCase "C" $ evaluateMany
+        [spadeTwo,clubFive,heartSeven,spadeThree,spadeFive
+        ,diamondSeven,clubFive,clubSeven
+        ]
+        @=?
+        Evaluate.FullHouse Seven Five
+      ]
+    , testGroup "two-pair"
+      [ THU.testCase "A" $ evaluateMany 
+        [clubSeven,heartFive,spadeSeven,diamondFive,clubKing]
+        @=?
+        Evaluate.Pair2 Seven Five King
+      , THU.testCase "B" $ evaluateMany 
+        [spadeTwo,heartSeven,spadeFive,diamondSeven,clubFive]
+        @=?
+        Evaluate.Pair2 Seven Five Two
+      , THU.testCase "C" $ evaluateMany 
+        [spadeAce,heartAce,clubTen,diamondNine,spadeNine]
+        @=?
+        Evaluate.Pair2 Ace Nine Ten
+      ]
+    , testGroup "one-pair"
+      [ THU.testCase "A" $ evaluateMany 
+        [clubSeven,heartSix,spadeSeven,diamondFive,clubKing]
+        @=?
+        Evaluate.Pair1 Seven King Six Five
+      , THU.testCase "B" $ evaluateMany 
+        [spadeTwo,heartEight,spadeFive,diamondSeven,clubFive]
+        @=?
+        Evaluate.Pair1 Five Eight Seven Two
+      , THU.testCase "C" $ evaluateMany 
+        [spadeAce,heartKing,clubTen,diamondNine,spadeNine]
+        @=?
+        Evaluate.Pair1 Nine Ace King Ten
+      ]
+    , testGroup "straight-flush"
+      [ THU.testCase "A" $ evaluateMany
+        [clubSeven,clubFive,clubSix,clubEight,clubNine]
+        @=?
+        Evaluate.StraightFlush Nine
+      , THU.testCase "B" $ evaluateMany
+        [heartFour,heartFive,heartThree,heartAce,heartTwo]
+        @=?
+        Evaluate.StraightFlush Five
+      , THU.testCase "C" $ evaluateMany
+        [heartFour,heartFive,heartThree,heartAce,heartTwo
+        ,clubThree,clubFour,clubFive,clubSix,clubSeven
+        ]
+        @=?
+        Evaluate.StraightFlush Seven
+      , THU.testCase "C" $ evaluateMany
+        [heartFour,heartFive,heartThree,heartAce,heartTwo
+        ,clubThree,clubFour,clubFive,clubSix,clubSeven
+        ,spadeAce
+        ,diamondTen,diamondJack,diamondNine,diamondEight,diamondQueen
+        ]
+        @=?
+        Evaluate.StraightFlush Queen
+      ]
+    ]
+  , testGroup "evaluation-agreement"
+    [ TQC.testProperty "hand-5-all" $ TQC.forAll (genHandAll 5) $ \hand ->
+        evaluateMany hand === evaluate hand
+    , TQC.testProperty "hand-6-all" $ TQC.forAll (genHandAll 6) $ \hand ->
+        evaluateMany hand === maximum (map evaluate (chooseFiveFromSix hand))
+    , TQC.testProperty "hand-6-high" $ TQC.forAll (genHandHigh 6) $ \hand ->
+        evaluateMany hand === maximum (map evaluate (chooseFiveFromSix hand))
+    , TQC.testProperty "hand-6-low" $ TQC.forAll (genHandLow 6) $ \hand ->
+        evaluateMany hand === maximum (map evaluate (chooseFiveFromSix hand))
+    , TQC.testProperty "hand-6-high-spades" $ TQC.forAll (genHandSpadesHigh 6) $ \hand ->
+        evaluateMany hand === maximum (map evaluate (chooseFiveFromSix hand))
+    , TQC.testProperty "hand-6-low-diamonds" $ TQC.forAll (genHandDiamondsLow 6) $ \hand ->
+        evaluateMany hand === maximum (map evaluate (chooseFiveFromSix hand))
+    ]
   ]
+
+chooseFiveFromSix :: PrimArray Card -> [PrimArray Card]
+chooseFiveFromSix !cards
+  | PM.sizeofPrimArray cards /= 6 =
+      errorWithoutStackTrace "chooseFiveFromSix: invariant violated"
+  | otherwise =
+      let c0 = PM.indexPrimArray cards 0
+          c1 = PM.indexPrimArray cards 1
+          c2 = PM.indexPrimArray cards 2
+          c3 = PM.indexPrimArray cards 3
+          c4 = PM.indexPrimArray cards 4
+          c5 = PM.indexPrimArray cards 5
+       in [ Exts.fromList [c5,c1,c2,c3,c4]
+          , Exts.fromList [c0,c5,c2,c3,c4]
+          , Exts.fromList [c0,c1,c5,c3,c4]
+          , Exts.fromList [c0,c1,c2,c5,c4]
+          , Exts.fromList [c0,c1,c2,c3,c5]
+          , Exts.fromList [c0,c1,c2,c3,c4]
+          ]
+
+genHandAll :: Int -> TQC.Gen (PrimArray Card)
+genHandAll !n = fmap Exts.fromList (TQC.vectorOf n genCardAny)
+
+genHandHigh :: Int -> TQC.Gen (PrimArray Card)
+genHandHigh !n = fmap Exts.fromList (TQC.vectorOf n genCardHigh)
+
+genHandSpadesHigh :: Int -> TQC.Gen (PrimArray Card)
+genHandSpadesHigh !n = fmap Exts.fromList (TQC.vectorOf n genCardSpadeHigh)
+
+genHandDiamondsLow :: Int -> TQC.Gen (PrimArray Card)
+genHandDiamondsLow !n = fmap Exts.fromList (TQC.vectorOf n genCardDiamondLow)
+
+genHandLow :: Int -> TQC.Gen (PrimArray Card)
+genHandLow !n = fmap Exts.fromList (TQC.vectorOf n genCardLow)
+
+genCardAny :: TQC.Gen Card
+genCardAny = liftA2 Card.construct genSuit genRank
+
+genCardHigh :: TQC.Gen Card
+genCardHigh = liftA2 Card.construct genSuit genHighRank
+
+genCardSpadeHigh :: TQC.Gen Card
+genCardSpadeHigh = fmap (Card.construct Spade) genHighRank
+
+genCardDiamondLow :: TQC.Gen Card
+genCardDiamondLow = fmap (Card.construct Diamond) genLowRank
+
+genCardLow :: TQC.Gen Card
+genCardLow = liftA2 Card.construct genSuit genLowRank
+
+genLowRank :: TQC.Gen Rank
+genLowRank = do
+  x <- TQC.chooseInt (1,8)
+  if x == 1
+    then pure Ace
+    else pure (Rank (fromIntegral x))
+
+genHighRank :: TQC.Gen Rank
+genHighRank = fmap (Rank . fromIntegral) (TQC.chooseInt (7,14))
+
+genRank :: TQC.Gen Rank
+genRank = fmap (Rank . fromIntegral) (TQC.chooseInt (2,14))
+
+genSuit :: TQC.Gen Suit
+genSuit = fmap (Suit . fromIntegral) (TQC.chooseInt (0,3))
 
 spadeAce :: Card
 spadeAce = Card.construct Spade Ace

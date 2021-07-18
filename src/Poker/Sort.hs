@@ -4,6 +4,7 @@
 
 module Poker.Sort
   ( byRankThenSuit
+  , bySuitThenRank
   ) where
 
 import Control.Monad.ST.Run (runPrimArrayST)
@@ -24,6 +25,18 @@ byRankThenSuit !cards = byScore
     let Rank r = Card.rank c
         Suit s = Card.suit c
      in (16 * (fromIntegral @Word8 @Int r)) + fromIntegral @Word8 @Int s
+  )
+  cards
+
+-- | Sort a hand so that high cards come first. Ace counts as the
+-- highest card.
+bySuitThenRank :: PrimArray Card -> PrimArray Card
+{-# noinline bySuitThenRank #-}
+bySuitThenRank !cards = byScore
+  (\c ->
+    let Rank r = Card.rank c
+        Suit s = Card.suit c
+     in (16 * (fromIntegral @Word8 @Int s)) + fromIntegral @Word8 @Int r
   )
   cards
 

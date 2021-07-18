@@ -40,7 +40,7 @@ newtype Card = Card Word16
   deriving (Eq,Prim)
 
 newtype Suit = Suit Word8
-  deriving (Eq)
+  deriving (Eq,Prim)
 
 pattern Spade :: Suit
 pattern Spade = Suit 3
@@ -55,7 +55,7 @@ pattern Diamond :: Suit
 pattern Diamond = Suit 0
 
 newtype Rank = Rank Word8
-  deriving (Eq,Ord)
+  deriving (Eq,Ord,Prim)
 
 pattern Two :: Rank
 pattern Two = Rank 2

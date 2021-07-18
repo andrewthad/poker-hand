@@ -27,6 +27,7 @@ library
     , contiguous
     , text
     , run-st
+    , primitive-unlifted >=0.1.3 && <0.2
   hs-source-dirs: src
   default-language: Haskell2010
   ghc-options: -O2 -Wall
@@ -43,6 +44,8 @@ test-suite test
     , primitive
     , tasty >=1.2.3 && <1.3
     , tasty-hunit >=0.10.0.2 && <0.11
+    , tasty-quickcheck >=0.10.1.2
+    , QuickCheck >=2.14.2
     , text >=1.2
     , unordered-containers
     , poker-hand
