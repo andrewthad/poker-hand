@@ -56,7 +56,7 @@ encodeEnglishTitle s = case s of
   Three -> T.pack "Three"
   Four -> T.pack "Four"
   Five -> T.pack "Five"
-  Six -> T.pack "Sixe"
+  Six -> T.pack "Six"
   Seven -> T.pack "Seven"
   Eight -> T.pack "Eight"
   Nine -> T.pack "Nine"
